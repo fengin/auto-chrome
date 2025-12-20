@@ -1,0 +1,20 @@
+# global settings
+
+chrome:
+  executable_path: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  debug_port: 9222
+  user_data_dir: "c:\\temp_chrome_data"
+  launch_args:
+    - "--remote-debugging-port=9222"
+    - "--no-first-run"
+
+logging:
+  level: "INFO"
+  file: "auto_chrome.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+tasks:
+  default_timeout: 30000
+  
+  # Task specific configuration / 任务特定配置
+  linux_do_target_count: 50 

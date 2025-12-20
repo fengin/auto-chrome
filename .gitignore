@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / Packaging
+dist/
+build/
+*.egg-info/
+
+# Virtual Environment
+venv/
+env/
+.env
+
+# IDEs
+.vscode/
+.idea/
+
+# Project specific
+auto_chrome.log
+c:\temp_chrome_data\
