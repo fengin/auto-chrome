@@ -16,5 +16,13 @@ logging:
 tasks:
   default_timeout: 30000
   
-  # Task specific configuration / 任务特定配置
-  linux_do_target_count: 50 
+  #以下针对任务特定配置
+
+  # 刷阅读贴子主题数
+  linux_do_target_count: 500 
+
+  # 刷贴子数量任务配置
+  linux_do_posts_target_count: 10000  # 目标阅读帖子数
+  linux_do_posts_skip_top: 3         # 跳过前 N 个热门话题
+  linux_do_posts_read_time_min: 1    # 每个帖子最短阅读停顿（秒）
+  linux_do_posts_read_time_max: 3    # 每个帖子最长阅读停顿（秒）

@@ -36,9 +36,32 @@ python launch_browser.py
 *(注意：请在弹出的浏览器窗口中登录你需要访问的网站)*
 
 ### 3. 运行示例任务
-框架自带了一个浏览 Linux.do 论坛的示例任务：
+
+框架自带了两个浏览 [Linux.do](https://linux.do) 论坛的示例任务，可用于完成社区日常阅读任务：
+
+#### 📖 示例一：刷主题阅读数
+自动浏览"开发"分类下的话题，滚动页面收集话题链接并逐一访问，完成主题阅读数任务。
 ```bash
 python main.py --task linux_do
+```
+在 `config/settings.yaml` 中可配置目标主题数：
+```yaml
+tasks:
+  linux_do_target_count: 500    # 目标阅读主题数
+```
+
+#### 📝 示例二：刷帖子阅读数
+从[热门话题排行榜](https://linux.do/hot?order=posts)（按帖子数排序）中，跳过前 N 个话题，逐一进入后续话题并模拟真实用户行为滚动阅读帖子（渐进式滚动、随机停顿、偶尔回滚等），完成帖子阅读数任务。
+```bash
+python main.py --task linux_do_posts
+```
+在 `config/settings.yaml` 中可配置参数：
+```yaml
+tasks:
+  linux_do_posts_target_count: 10000  # 目标阅读帖子数
+  linux_do_posts_skip_top: 3         # 跳过前 N 个热门话题
+  linux_do_posts_read_time_min: 1    # 每个帖子最短阅读停顿（秒）
+  linux_do_posts_read_time_max: 3    # 每个帖子最长阅读停顿（秒）
 ```
 
 ### 4. 配置文件说明 (可选)

@@ -20,3 +20,6 @@ env/
 # Project specific
 auto_chrome.log
 c:\temp_chrome_data\
+
+# Private tasks / 私有任务
+tasks/xihumei/
