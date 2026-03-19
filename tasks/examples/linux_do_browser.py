@@ -1,5 +1,8 @@
 # https://aibook.ren (AI全书)
+import json
+import os
 import random
+import re
 import time
 from framework.core.task_base import BaseTask
 
@@ -24,6 +27,11 @@ class LinuxDoBrowserTask(BaseTask):
         # Use config if available / 如果可用，使用配置
         target_count = self.context.config.tasks.get("linux_do_target_count", 100) 
         self.logger.info(f"Collecting topics from this category... target: {target_count}")
+
+        # 加载已读话题历史记录
+        self._load_history()
+        self.logger.info(f"已加载历史记录，共有 {len(self.visited_topics)} 个已读话题")
+
         topic_urls = set()
         
         no_new_data_count = 0
@@ -71,12 +79,21 @@ class LinuxDoBrowserTask(BaseTask):
             last_height = current_height
 
         topics_list = list(topic_urls)[:target_count]
-        random.shuffle(topics_list)
-        
-        self.logger.info(f"Successfully collected {len(topics_list)} topics. Starting FAST browse loop...")
 
-        for i, url in enumerate(topics_list):
-            self.logger.info(f"[{i+1}/{len(topics_list)}] Visiting: {url}")
+        # 过滤已读话题
+        new_topics = [url for url in topics_list if self._get_topic_base(url) not in self.visited_topics]
+        self.logger.info(f"共收集 {len(topics_list)} 个话题，其中 {len(new_topics)} 个未读")
+
+        if not new_topics:
+            self.logger.info("所有话题均已读过，任务结束")
+            return
+
+        random.shuffle(new_topics)
+        
+        self.logger.info(f"Starting FAST browse loop with {len(new_topics)} new topics...")
+
+        for i, url in enumerate(new_topics):
+            self.logger.info(f"[{i+1}/{len(new_topics)}] Visiting: {url}")
             try:
                 page.goto(url, timeout=30000, wait_until="domcontentloaded")
                 
@@ -88,8 +105,40 @@ class LinuxDoBrowserTask(BaseTask):
                 page.mouse.wheel(0, -500)
                 page.wait_for_timeout(random.randint(500, 1000))
 
+                # 记录已读并保存
+                self.visited_topics.add(self._get_topic_base(url))
+                self._save_history()
+
             except Exception as e:
                 self.logger.error(f"Error visiting {url}: {e}")
                 continue
 
-        self.logger.info("Finished browsing topics!")
+        self.logger.info(f"Finished browsing topics! 共浏览 {len(new_topics)} 个新话题")
+
+    def _get_history_path(self):
+        """获取历史记录文件路径（与任务脚本同目录）"""
+        return os.path.join(os.path.dirname(__file__), ".linux_do_history.json")
+
+    def _load_history(self):
+        """从 JSON 文件加载已读话题历史记录"""
+        self.visited_topics = set()
+        path = self._get_history_path()
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    self.visited_topics = set(json.load(f))
+            except Exception as e:
+                self.logger.warning(f"加载历史记录失败: {e}")
+
+    def _save_history(self):
+        """将已读话题历史记录保存到 JSON 文件"""
+        try:
+            with open(self._get_history_path(), "w", encoding="utf-8") as f:
+                json.dump(list(self.visited_topics), f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            self.logger.warning(f"保存历史记录失败: {e}")
+
+    @staticmethod
+    def _get_topic_base(url):
+        """提取话题基础路径（去掉末尾页码）"""
+        return re.sub(r'/\d+$', '', url)

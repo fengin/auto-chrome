@@ -1,5 +1,8 @@
 # https://aibook.ren (AI全书)
+import json
+import os
 import random
+import re
 import time
 from framework.core.task_base import BaseTask
 
@@ -21,7 +24,17 @@ class LinuxDoPostsBrowserTask(BaseTask):
         self.read_time_min = self.context.config.tasks.get("linux_do_posts_read_time_min", 2)
         self.read_time_max = self.context.config.tasks.get("linux_do_posts_read_time_max", 5)
 
+        # 点赞配置
+        self.like_min_chars = self.context.config.tasks.get("linux_do_posts_like_min_chars", 50)
+        self.like_max_count = self.context.config.tasks.get("linux_do_posts_like_max_count", 30)
+        self.total_likes = 0  # 已点赞计数
+
         self.logger.info(f"目标阅读帖子数: {target_posts}, 跳过前 {skip_top} 个热门话题")
+        self.logger.info(f"点赞策略: 帖子中文字数 >= {self.like_min_chars} 时点赞，上限 {self.like_max_count} 个")
+
+        # 加载已读主题历史记录
+        self._load_history()
+        self.logger.info(f"已加载历史记录，共有 {len(self.visited_topics)} 个已读主题")
 
         # 将页面带到前台，确保用户可以看到操作
         page.bring_to_front()
@@ -39,7 +52,15 @@ class LinuxDoPostsBrowserTask(BaseTask):
             self.logger.warning("未收集到任何话题链接，任务结束")
             return
 
-        self.logger.info(f"共收集到 {len(topic_urls)} 个话题（已跳过前 {skip_top} 个）")
+        # 过滤已读主题
+        new_topic_urls = [url for url in topic_urls if self._get_topic_base(url) not in self.visited_topics]
+        self.logger.info(f"共收集到 {len(topic_urls)} 个话题（已跳过前 {skip_top} 个），其中 {len(new_topic_urls)} 个未读")
+
+        if not new_topic_urls:
+            self.logger.info("所有话题均已读过，任务结束")
+            return
+
+        topic_urls = new_topic_urls
 
         # Step 3: 逐一浏览话题中的帖子
         total_read = 0
@@ -56,6 +77,10 @@ class LinuxDoPostsBrowserTask(BaseTask):
                 posts_read = self._browse_topic_posts(page, topic_url, target_posts - total_read)
                 total_read += posts_read
                 self.logger.info(f"本话题阅读了 {posts_read} 个帖子，累计: {total_read}/{target_posts}")
+
+                # 记录已读主题并保存
+                self.visited_topics.add(self._get_topic_base(topic_url))
+                self._save_history()
             except Exception as e:
                 self.logger.error(f"浏览话题出错: {e}")
                 continue
@@ -67,8 +92,39 @@ class LinuxDoPostsBrowserTask(BaseTask):
                 time.sleep(wait_time)
 
         self.logger.info(f"\n{'='*50}")
-        self.logger.info(f"任务完成！共阅读 {total_read} 个帖子")
+        self.logger.info(f"任务完成！共阅读 {total_read} 个帖子，点赞 {self.total_likes} 个")
         self.logger.info(f"{'='*50}")
+
+    def _get_history_path(self):
+        """获取历史记录文件路径（与任务脚本同目录）"""
+        return os.path.join(os.path.dirname(__file__), ".linux_do_posts_history.json")
+
+    def _load_history(self):
+        """从 JSON 文件加载已读主题历史记录"""
+        self.visited_topics = set()
+        path = self._get_history_path()
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    self.visited_topics = set(json.load(f))
+            except Exception as e:
+                self.logger.warning(f"加载历史记录失败: {e}")
+
+    def _save_history(self):
+        """将已读主题历史记录保存到 JSON 文件"""
+        try:
+            with open(self._get_history_path(), "w", encoding="utf-8") as f:
+                json.dump(list(self.visited_topics), f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            self.logger.warning(f"保存历史记录失败: {e}")
+
+    @staticmethod
+    def _get_topic_base(url):
+        """
+        提取主题基础路径（去掉末尾页码），同一主题不同页面视为相同。
+        例如: https://linux.do/t/topic/1697632/8 -> https://linux.do/t/topic/1697632
+        """
+        return re.sub(r'/\d+$', '', url)
 
     def _collect_topics(self, page, skip_top):
         """
@@ -149,6 +205,9 @@ class LinuxDoPostsBrowserTask(BaseTask):
                         posts_read += 1
                         new_posts_found = True
 
+                        # 尝试点赞
+                        self._try_like_post(post_el)
+
                         if posts_read >= remaining_target:
                             break
                 except Exception:
@@ -192,6 +251,70 @@ class LinuxDoPostsBrowserTask(BaseTask):
                 no_new_posts_count = 0
 
         return posts_read
+
+    def _try_like_post(self, post_el):
+        """
+        尝试为帖子点赞：
+        - 帖子内容中文字数 >= like_min_chars 时才点赞
+        - 已点赞数达到 like_max_count 时停止
+        - 已经点过赞的帖子不重复点赞
+        """
+        if self.total_likes >= self.like_max_count:
+            return
+
+        try:
+            # 获取帖子文本内容
+            content_el = post_el.locator(".cooked").first
+            if not content_el.is_visible():
+                return
+
+            text = content_el.text_content() or ""
+            # 统计中文字符数
+            chinese_chars = len(re.findall(r'[\u4e00-\u9fff]', text))
+
+            if chinese_chars < self.like_min_chars:
+                return
+
+            # 70% 概率点赞，30% 概率跳过，避免点赞过于频繁
+            if random.random() > 0.7:
+                return
+
+            # 查找点赞按钮（兼容多种 Discourse 版本和插件）
+            # 依次尝试: 标准按钮 > reactions 插件按钮 > 包含心形图标的按钮
+            like_btn = None
+            for selector in [
+                "button.toggle-like",
+                "button.like-count",
+                ".discourse-reactions-reaction-button",
+                "button[class*='like']",
+            ]:
+                btn = post_el.locator(selector).first
+                try:
+                    if btn.is_visible(timeout=500):
+                        like_btn = btn
+                        break
+                except Exception:
+                    continue
+
+            if not like_btn:
+                return
+
+            # 检查是否已点过赞（已点赞的按钮有 has-like / my-likes / liked 类名）
+            btn_class = like_btn.get_attribute("class") or ""
+            if any(kw in btn_class for kw in ["has-like", "my-likes", "liked"]):
+                return
+
+            # 点赞
+            like_btn.click()
+            self.total_likes += 1
+            self.logger.info(f"  👍 点赞！（中文字数: {chinese_chars}, 已点赞: {self.total_likes}/{self.like_max_count}）")
+
+            # 点赞后短暂停顿，模拟自然行为
+            time.sleep(random.uniform(0.5, 1.5))
+
+        except Exception as e:
+            # 点赞失败不影响主流程
+            pass
 
     def _human_like_scroll(self, page):
         """

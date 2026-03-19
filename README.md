@@ -40,7 +40,7 @@ python launch_browser.py
 框架自带了两个浏览 [Linux.do](https://linux.do) 论坛的示例任务，可用于完成社区日常阅读任务：
 
 #### 📖 示例一：刷主题阅读数
-自动浏览"开发"分类下的话题，滚动页面收集话题链接并逐一访问，完成主题阅读数任务。
+自动浏览"开发"分类下的话题，滚动页面收集话题链接并逐一访问，完成主题阅读数任务。已读话题会自动记录在本地，重复执行时自动跳过已读话题。
 ```bash
 python main.py --task linux_do
 ```
@@ -51,7 +51,7 @@ tasks:
 ```
 
 #### 📝 示例二：刷帖子阅读数
-从[热门话题排行榜](https://linux.do/hot?order=posts)（按帖子数排序）中，跳过前 N 个话题，逐一进入后续话题并模拟真实用户行为滚动阅读帖子（渐进式滚动、随机停顿、偶尔回滚等），完成帖子阅读数任务。
+从[热门话题排行榜](https://linux.do/hot?order=posts)（按帖子数排序）中，跳过前 N 个话题，逐一进入后续话题并模拟真实用户行为滚动阅读帖子（渐进式滚动、随机停顿、偶尔回滚等），完成帖子阅读数任务。阅读时会自动为中文字数达标的帖子点赞（70% 概率触发，可配置上限）。已读主题会自动记录在本地，重复执行时自动跳过已读主题。
 ```bash
 python main.py --task linux_do_posts
 ```
@@ -62,6 +62,8 @@ tasks:
   linux_do_posts_skip_top: 3         # 跳过前 N 个热门话题
   linux_do_posts_read_time_min: 1    # 每个帖子最短阅读停顿（秒）
   linux_do_posts_read_time_max: 3    # 每个帖子最长阅读停顿（秒）
+  linux_do_posts_like_min_chars: 50  # 帖子中文字数达到此值时点赞
+  linux_do_posts_like_max_count: 30  # 最多点赞数量
 ```
 
 ### 4. 配置文件说明 (可选)
