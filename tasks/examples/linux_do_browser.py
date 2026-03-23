@@ -31,7 +31,6 @@ class LinuxDoBrowserTask(BaseTask):
             time.sleep(2)
 
             no_new_data_count = 0
-            last_height = 0
             seen_urls = set(url for url in topic_urls)
             
             while len(topic_urls) < target_count:
@@ -66,16 +65,14 @@ class LinuxDoBrowserTask(BaseTask):
                 page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
                 page.wait_for_timeout(1500)
 
-                current_height = page.evaluate("document.body.scrollHeight")
-                if current_height == last_height and current_count == initial_count:
+                # 只要未读数量连续不增长就切换到下一个入口
+                if current_count == initial_count:
                      no_new_data_count += 1
-                     if no_new_data_count > 10:
-                         self.logger.info(f"当前入口页面已无更多内容，切换下一个入口")
+                     if no_new_data_count >= 10:
+                         self.logger.info(f"当前入口已无更多未读话题，切换下一个入口")
                          break
                 else:
                      no_new_data_count = 0
-                
-                last_height = current_height
 
         topics_list = topic_urls[:target_count]
 

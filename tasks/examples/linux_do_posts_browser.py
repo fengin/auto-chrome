@@ -117,7 +117,7 @@ class LinuxDoPostsBrowserTask(BaseTask):
             return topic_urls
 
         # 向下滚动几次以加载更多话题
-        for scroll_round in range(3):
+        for scroll_round in range(10):
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             time.sleep(1.5)
 
