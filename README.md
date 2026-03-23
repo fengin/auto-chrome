@@ -40,18 +40,21 @@ python launch_browser.py
 框架自带了两个浏览 [Linux.do](https://linux.do) 论坛的示例任务，可用于完成社区日常阅读任务：
 
 #### 📖 示例一：刷主题阅读数
-自动浏览"开发"分类下的话题，滚动页面收集话题链接并逐一访问，完成主题阅读数任务。已读话题会自动记录在本地，重复执行时自动跳过已读话题。
+从配置的入口页面收集未读话题（通过小蓝点标记识别），逐一访问完成主题阅读数任务。支持配置多个入口 URL。
 ```bash
 python main.py --task linux_do
 ```
-在 `config/settings.yaml` 中可配置目标主题数：
+在 `config/settings.yaml` 中可配置参数：
 ```yaml
 tasks:
-  linux_do_target_count: 500    # 目标阅读主题数
+  linux_do_target_count: 500         # 目标阅读主题数
+  linux_do_entry_urls:               # 入口页面（支持多个）
+    - "https://linux.do/c/develop/4"
+    - "https://linux.do/c/resource/14"
 ```
 
 #### 📝 示例二：刷帖子阅读数
-从[热门话题排行榜](https://linux.do/hot?order=posts)（按帖子数排序）中，跳过前 N 个话题，逐一进入后续话题并模拟真实用户行为滚动阅读帖子（渐进式滚动、随机停顿、偶尔回滚等），完成帖子阅读数任务。阅读时会自动为中文字数达标的帖子点赞（70% 概率触发，可配置上限）。已读主题会自动记录在本地，重复执行时自动跳过已读主题。
+从配置的入口页面收集未读话题（小蓝点=全新主题、蓝框数字=有未读帖子），逐一进入并模拟真实用户行为滚动阅读帖子（渐进式滚动、随机停顿、偶尔回滚等）。阅读时会自动为中文字数达标的帖子点赞（70% 概率触发，可配置上限）。支持配置多个入口 URL。
 ```bash
 python main.py --task linux_do_posts
 ```
@@ -64,6 +67,8 @@ tasks:
   linux_do_posts_read_time_max: 3    # 每个帖子最长阅读停顿（秒）
   linux_do_posts_like_min_chars: 50  # 帖子中文字数达到此值时点赞
   linux_do_posts_like_max_count: 30  # 最多点赞数量
+  linux_do_posts_entry_urls:         # 入口页面（支持多个）
+    - "https://linux.do/hot?order=posts"
 ```
 
 ### 4. 配置文件说明 (可选)

@@ -24,7 +24,5 @@ c:\temp_chrome_data\
 # Private tasks / 私有任务
 tasks/xihumei/
 
-# 任务运行数据 / Task runtime data
-.linux_do_history.json
-.linux_do_posts_history.json
+# 临时文件 / Temp files
 某个主题.html

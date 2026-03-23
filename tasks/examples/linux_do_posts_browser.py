@@ -1,6 +1,4 @@
 # https://aibook.ren (AI全书)
-import json
-import os
 import random
 import re
 import time
@@ -32,35 +30,39 @@ class LinuxDoPostsBrowserTask(BaseTask):
         self.logger.info(f"目标阅读帖子数: {target_posts}, 跳过前 {skip_top} 个热门话题")
         self.logger.info(f"点赞策略: 帖子中文字数 >= {self.like_min_chars} 时点赞，上限 {self.like_max_count} 个")
 
-        # 加载已读主题历史记录
-        self._load_history()
-        self.logger.info(f"已加载历史记录，共有 {len(self.visited_topics)} 个已读主题")
-
         # 将页面带到前台，确保用户可以看到操作
         page.bring_to_front()
 
-        # Step 1: 导航到热门话题页面（按帖子数排序）
-        hot_url = "https://linux.do/hot?order=posts"
-        self.logger.info(f"导航到热门话题页面: {hot_url}")
-        page.goto(hot_url, timeout=30000, wait_until="domcontentloaded")
-        time.sleep(3)
+        # 从配置读取入口 URL 列表，支持多个
+        entry_urls = self.context.config.tasks.get("linux_do_posts_entry_urls", ["https://linux.do/hot?order=posts"])
+        if isinstance(entry_urls, str):
+            entry_urls = [entry_urls]
 
-        # Step 2: 收集话题链接（跳过前 N 个）
-        topic_urls = self._collect_topics(page, skip_top)
+        # Step 1: 从每个入口页面收集未读话题链接
+        all_topic_urls = []
+        for entry_idx, entry_url in enumerate(entry_urls):
+            self.logger.info(f"[入口 {entry_idx+1}/{len(entry_urls)}] 导航到: {entry_url}")
+            page.goto(entry_url, timeout=30000, wait_until="domcontentloaded")
+            time.sleep(3)
+
+            topic_urls = self._collect_topics(page, skip_top)
+            self.logger.info(f"  从该入口收集到 {len(topic_urls)} 个未读话题")
+            all_topic_urls.extend(topic_urls)
+
+        # 去重（保持顺序）
+        seen = set()
+        topic_urls = []
+        for url in all_topic_urls:
+            base = self._get_topic_base(url)
+            if base not in seen:
+                seen.add(base)
+                topic_urls.append(url)
 
         if not topic_urls:
-            self.logger.warning("未收集到任何话题链接，任务结束")
+            self.logger.warning("未收集到任何未读话题链接，任务结束")
             return
 
-        # 过滤已读主题
-        new_topic_urls = [url for url in topic_urls if self._get_topic_base(url) not in self.visited_topics]
-        self.logger.info(f"共收集到 {len(topic_urls)} 个话题（已跳过前 {skip_top} 个），其中 {len(new_topic_urls)} 个未读")
-
-        if not new_topic_urls:
-            self.logger.info("所有话题均已读过，任务结束")
-            return
-
-        topic_urls = new_topic_urls
+        self.logger.info(f"共收集到 {len(topic_urls)} 个未读话题（已跳过前 {skip_top} 个）")
 
         # Step 3: 逐一浏览话题中的帖子
         total_read = 0
@@ -77,10 +79,6 @@ class LinuxDoPostsBrowserTask(BaseTask):
                 posts_read = self._browse_topic_posts(page, topic_url, target_posts - total_read)
                 total_read += posts_read
                 self.logger.info(f"本话题阅读了 {posts_read} 个帖子，累计: {total_read}/{target_posts}")
-
-                # 记录已读主题并保存
-                self.visited_topics.add(self._get_topic_base(topic_url))
-                self._save_history()
             except Exception as e:
                 self.logger.error(f"浏览话题出错: {e}")
                 continue
@@ -95,29 +93,6 @@ class LinuxDoPostsBrowserTask(BaseTask):
         self.logger.info(f"任务完成！共阅读 {total_read} 个帖子，点赞 {self.total_likes} 个")
         self.logger.info(f"{'='*50}")
 
-    def _get_history_path(self):
-        """获取历史记录文件路径（与任务脚本同目录）"""
-        return os.path.join(os.path.dirname(__file__), ".linux_do_posts_history.json")
-
-    def _load_history(self):
-        """从 JSON 文件加载已读主题历史记录"""
-        self.visited_topics = set()
-        path = self._get_history_path()
-        if os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    self.visited_topics = set(json.load(f))
-            except Exception as e:
-                self.logger.warning(f"加载历史记录失败: {e}")
-
-    def _save_history(self):
-        """将已读主题历史记录保存到 JSON 文件"""
-        try:
-            with open(self._get_history_path(), "w", encoding="utf-8") as f:
-                json.dump(list(self.visited_topics), f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            self.logger.warning(f"保存历史记录失败: {e}")
-
     @staticmethod
     def _get_topic_base(url):
         """
@@ -128,8 +103,9 @@ class LinuxDoPostsBrowserTask(BaseTask):
 
     def _collect_topics(self, page, skip_top):
         """
-        从热门话题页面收集话题 URL，跳过前 N 个。
-        支持滚动加载更多话题。
+        从话题列表页面收集未读话题 URL。
+        - 小蓝点 (.badge.new-topic)：全新未读主题，用主题 title 链接进入
+        - 蓝框数字 (.badge.unread-posts)：有未读帖子，用蓝框链接直接跳到未读位置
         """
         topic_urls = []
 
@@ -153,6 +129,9 @@ class LinuxDoPostsBrowserTask(BaseTask):
         rows = page.locator("tr.topic-list-item").all()
         self.logger.info(f"页面上共有 {len(rows)} 个话题行")
 
+        new_count = 0
+        unread_count = 0
+
         for idx, row in enumerate(rows):
             # 跳过前 N 个话题
             if idx < skip_top:
@@ -164,16 +143,33 @@ class LinuxDoPostsBrowserTask(BaseTask):
                 continue
 
             try:
-                link = row.locator("a.title").first
-                href = link.get_attribute("href")
-                if href:
-                    if href.startswith("/"):
-                        href = "https://linux.do" + href
-                    if "/t/" in href:
-                        topic_urls.append(href)
+                # 检查小蓝点（全新未读主题）
+                new_badge = row.locator(".badge.new-topic")
+                if new_badge.count() > 0:
+                    link = row.locator("a.title").first
+                    href = link.get_attribute("href")
+                    if href:
+                        if href.startswith("/"):
+                            href = "https://linux.do" + href
+                        if "/t/" in href:
+                            topic_urls.append(href)
+                            new_count += 1
+                    continue
+
+                # 检查蓝框数字（有未读帖子）
+                unread_badge = row.locator(".badge.unread-posts")
+                if unread_badge.count() > 0:
+                    href = unread_badge.first.get_attribute("href")
+                    if href:
+                        if href.startswith("/"):
+                            href = "https://linux.do" + href
+                        if "/t/" in href:
+                            topic_urls.append(href)
+                            unread_count += 1
             except Exception:
                 pass
 
+        self.logger.info(f"  其中全新主题 {new_count} 个，有未读帖子的主题 {unread_count} 个")
         return topic_urls
 
     def _browse_topic_posts(self, page, topic_url, remaining_target):
