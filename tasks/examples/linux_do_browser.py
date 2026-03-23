@@ -28,7 +28,7 @@ class LinuxDoBrowserTask(BaseTask):
             time.sleep(3)
 
             # 在当前入口列表页中寻找未读话题并逐一点击浏览
-            read_in_entry = self._browse_unread_in_list(page, target_count - topics_read)
+            read_in_entry = self._browse_unread_in_list(page, entry_url, target_count - topics_read)
             topics_read += read_in_entry
             self.logger.info(f"入口 {entry_idx+1} 完成，本入口阅读 {read_in_entry} 个，累计: {topics_read}/{target_count}")
 
@@ -36,13 +36,13 @@ class LinuxDoBrowserTask(BaseTask):
         self.logger.info(f"任务完成！共阅读 {topics_read} 个话题")
         self.logger.info(f"{'='*50}")
 
-    def _browse_unread_in_list(self, page, remaining):
+    def _browse_unread_in_list(self, page, entry_url, remaining):
         """
         在当前话题列表页中：
         1. 寻找带小蓝点的未读话题
         2. 点击标题进入话题
         3. 模拟滚动浏览
-        4. 返回列表，继续下一个
+        4. 重新导航回列表（释放内存），继续下一个
         5. 连续下拉 3 次无新未读话题则返回
         """
         read_count = 0
@@ -95,16 +95,16 @@ class LinuxDoBrowserTask(BaseTask):
                     if read_count >= remaining:
                         break
 
-                    # 返回列表页
+                    # 重新导航回列表页（释放话题页面内存，避免累积）
                     self.logger.info(f"  返回列表...")
-                    page.go_back()
+                    page.goto(entry_url, timeout=30000, wait_until="load")
                     time.sleep(random.uniform(2, 3))
 
                 except Exception as e:
                     self.logger.error(f"  处理话题出错: {e}")
-                    # 尝试回退到列表
+                    # 尝试回到列表
                     try:
-                        page.go_back()
+                        page.goto(entry_url, timeout=30000, wait_until="load")
                         time.sleep(2)
                     except Exception:
                         pass
