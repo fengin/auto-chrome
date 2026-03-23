@@ -21,6 +21,7 @@ tasks:
   # 刷阅读主题数任务配置
   linux_do_target_count: 500         # 目标阅读主题数
   linux_do_entry_urls:               # 入口页面（支持多个，依次访问收集话题）
+    - "https://linux.do/latest"
     - "https://linux.do/c/develop/4"
     - "https://linux.do/c/resource/14"
     - "https://linux.do/c/welfare/36"
@@ -34,7 +35,7 @@ tasks:
   linux_do_posts_read_time_min: 1    # 每个帖子最短阅读停顿（秒）
   linux_do_posts_read_time_max: 3    # 每个帖子最长阅读停顿（秒）
   linux_do_posts_like_min_chars: 50  # 帖子中文字数达到此值时点赞
-  linux_do_posts_like_max_count: 50  # 最多点赞数量
+  linux_do_posts_like_max_count: 20  # 最多点赞数量
   linux_do_posts_entry_urls:         # 入口页面（支持多个，依次访问收集主题）
     - "https://linux.do/hot?order=posts"
     - "https://linux.do/tag/10-tag/10/l/top"
